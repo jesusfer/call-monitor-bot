@@ -6,14 +6,14 @@ Calling and Meeting Bot provides basic functionality like Create Call, Join a ca
 
 ## Frameworks
 
-![drop](https://img.shields.io/badge/.NET&nbsp;Core-3.1-green.svg)
-![drop](https://img.shields.io/badge/Bot&nbsp;Framework-3.0-green.svg)
+![drop](https://img.shields.io/badge/.NET&nbsp;8.0-green.svg)
+![drop](https://img.shields.io/badge/Bot&nbsp;Framework-4.0-green.svg)
 
 ## Prerequisites
 * [Office 365 tenant](https://developer.microsoft.com/en-us/microsoft-365/dev-program)
 
 * Microsoft Teams is installed and you have an account
-* [.NET Core SDK](https://dotnet.microsoft.com/download) version 3.1
+* [.NET SDK](https://dotnet.microsoft.com/download) version 8.0
 * [ngrok](https://ngrok.com/) or equivalent tunnelling solution
 
 1) Clone the repository
@@ -25,7 +25,7 @@ Calling and Meeting Bot provides basic functionality like Create Call, Join a ca
 1) If you are using Visual Studio
   - Launch Visual Studio
   - File -> Open -> Project/Solution
-  - Navigate to `samples/bot-calling-meeting/csharp` folder
+  - Navigate to `samples/bot-calling-meeting` folder
   - Select `CallingBotSample.csproj` file
 
 1) Run ngrok - point to port 3978
@@ -79,9 +79,9 @@ Calling and Meeting Bot provides basic functionality like Create Call, Join a ca
 
 * Grant Admin consent for the above permissions
 
-* Create `Bot Channel Registeration` in Azure account which have subscription enabled.
+* Create `Bot Channel Registration` in Azure account which have subscription enabled.
 * Provide `App-Name`, `Resource Group` and other required information
-* Update messgaing endpoint `https://{yourngrok}/api/messages` 
+* Update messaging endpoint `https://{yourngrok}/api/messages` 
 * Click on Create AppId and Secret
 * Enter `Client_Id and Client_Secret` of your azure app registered in demo tenant
 * Add the Teams channel.
