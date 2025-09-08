@@ -1,7 +1,11 @@
 ﻿using Microsoft.Graph;
 using Microsoft.Graph.Communications.Client.Authentication;
 using Microsoft.Graph.Communications.Common;
+using Microsoft.Kiota.Abstractions;
+using Microsoft.Kiota.Abstractions.Authentication;
+using System.Collections.Generic;
 using System.Net.Http;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace CallingBotSample.Authentication
@@ -38,6 +42,11 @@ namespace CallingBotSample.Authentication
         public Task AuthenticateRequestAsync(HttpRequestMessage request)
         {
             return this.AuthenticateOutboundRequestAsync(request, this.tenant);
+        }
+
+        public Task AuthenticateRequestAsync(RequestInformation request, Dictionary<string, object> additionalAuthenticationContext = null, CancellationToken cancellationToken = default)
+        {
+            throw new System.NotImplementedException();
         }
     }
 }

@@ -8,10 +8,11 @@ using System.Threading.Tasks;
 using Microsoft.Graph.Communications.Client.Authentication;
 using Microsoft.Graph.Communications.Common;
 using Microsoft.Graph.Communications.Common.Telemetry;
-using Microsoft.IdentityModel.Clients.ActiveDirectory;
 using Microsoft.IdentityModel.Protocols;
 using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 using Microsoft.IdentityModel.Tokens;
+using Azure.Core;
+using Azure.Identity;
 
 namespace CallingBotSample.Utility
 {
@@ -62,7 +63,7 @@ namespace CallingBotSample.Utility
             const string schema = "Bearer";
             const string replaceString = "{tenant}";
             const string oauthV2TokenLink = "https://login.microsoftonline.com/{tenant}";
-            const string resource = "https://graph.microsoft.com";
+            const string resource = "https://graph.microsoft.com/.default";
 
             // If no tenant was specified, we craft the token link using the common tenant.
             // https://docs.microsoft.com/en-us/azure/active-directory/develop/active-directory-v2-protocols#endpoints
@@ -70,23 +71,19 @@ namespace CallingBotSample.Utility
             var tokenLink = oauthV2TokenLink.Replace(replaceString, tenant);
 
             this.GraphLogger.Info("AuthenticationProvider: Generating OAuth token.");
-            var context = new AuthenticationContext(tokenLink);
-            var creds = new ClientCredential(this.appId, this.appSecret);
 
-            AuthenticationResult result;
+            var cred = new ClientSecretCredential(tenant, this.appId, this.appSecret);
             try
             {
-                result = await this.AcquireTokenWithRetryAsync(context, resource, creds, attempts: 3).ConfigureAwait(false);
+                AccessToken result = await this.AcquireTokenWithRetryAsync(cred, resource, attempts: 3).ConfigureAwait(false);
+                this.GraphLogger.Info($"AuthenticationProvider: Generated OAuth token. Expires in {result.ExpiresOn.Subtract(DateTimeOffset.UtcNow).TotalMinutes} minutes.");
+                request.Headers.Authorization = new AuthenticationHeaderValue(schema, result.Token);
             }
             catch (Exception ex)
             {
                 this.GraphLogger.Error(ex, $"Failed to generate token for client: {this.appId}");
                 throw;
             }
-
-            this.GraphLogger.Info($"AuthenticationProvider: Generated OAuth token. Expires in {result.ExpiresOn.Subtract(DateTimeOffset.UtcNow).TotalMinutes} minutes.");
-
-            request.Headers.Authorization = new AuthenticationHeaderValue(schema, result.AccessToken);
         }
 
         /// <summary>
@@ -171,7 +168,7 @@ namespace CallingBotSample.Utility
                 return new RequestValidationResult { IsValid = false };
             }
 
-            request.Properties.Add(HttpConstants.HeaderNames.Tenant, tenantClaim.Value);
+            request.Options.Set(new HttpRequestOptionsKey<string>(HttpConstants.HeaderNames.Tenant), tenantClaim.Value);
             return new RequestValidationResult { IsValid = true, TenantId = tenantClaim.Value };
         }
 
@@ -185,7 +182,7 @@ namespace CallingBotSample.Utility
         /// <returns>
         /// The <see cref="AuthenticationResult" />.
         /// </returns>
-        private async Task<AuthenticationResult> AcquireTokenWithRetryAsync(AuthenticationContext context, string resource, ClientCredential creds, int attempts)
+        private async Task<AccessToken> AcquireTokenWithRetryAsync(ClientSecretCredential creds, string resource, int attempts)
         {
             while (true)
             {
@@ -193,7 +190,8 @@ namespace CallingBotSample.Utility
 
                 try
                 {
-                    return await context.AcquireTokenAsync(resource, creds).ConfigureAwait(false);
+                
+                    return await creds.GetTokenAsync(new TokenRequestContext(new[] { resource }));
                 }
                 catch (Exception)
                 {

@@ -3,18 +3,18 @@
 // Licensed under the MIT license.
 // </copyright>
 
+using CallingBotSample.Configuration;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
+using Microsoft.Graph;
+using System;
+using Azure.Core;
+using Azure.Identity;
+
 namespace CallingBotSample.Extensions
 {
-    using CallingBotSample.Configuration;
-    using Microsoft.AspNetCore.Authentication;
-    using Microsoft.Extensions.Configuration;
-    using Microsoft.Extensions.DependencyInjection;
-    using Microsoft.Extensions.Options;
-    using Microsoft.Graph;
-    using Microsoft.Graph.Auth;
-    using Microsoft.Identity.Client;
-    using System;
-
     /// <summary>
     /// Graph Configuration.
     /// </summary>
@@ -29,19 +29,14 @@ namespace CallingBotSample.Extensions
         public static IServiceCollection ConfigureGraphComponent(this IServiceCollection services, Action<AzureAdOptions> azureAdOptionsAction)
         {
             var options = new AzureAdOptions();
+            // Execute the delegate to populate the options instance.
             azureAdOptionsAction(options);
 
-            IConfidentialClientApplication confidentialClientApplication = ConfidentialClientApplicationBuilder
-            .Create(options.ClientId)
-            .WithTenantId(options.TenantId)
-            .WithClientSecret(options.ClientSecret)
-            .Build();
+           var cred = new ClientSecretCredential(options.TenantId, options.ClientId, options.ClientSecret);
 
-            ClientCredentialProvider authenticationProvider = new ClientCredentialProvider(confidentialClientApplication);
-
-            services.AddScoped<IGraphServiceClient, GraphServiceClient>(sp =>
+            services.AddScoped<GraphServiceClient, GraphServiceClient>(sp =>
             {
-                return new GraphServiceClient(authenticationProvider);
+                return new GraphServiceClient(cred);
             });
 
             return services;

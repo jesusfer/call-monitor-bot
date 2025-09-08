@@ -12,6 +12,8 @@ namespace CallingBotSample.Helpers
     using System.Text;
     using System.Text.RegularExpressions;
     using Microsoft.Graph;
+    using Microsoft.Graph.Contracts;
+    using Microsoft.Graph.Models;
 
     /// <summary>
     /// Gets the join information.

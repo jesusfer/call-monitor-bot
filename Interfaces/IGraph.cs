@@ -6,6 +6,7 @@ namespace CallingBotSample.Interfaces
 {
     using System.Threading.Tasks;
     using Microsoft.Graph;
+    using Microsoft.Graph.Models;
 
     /// <summary>
     /// Interface for Graph.

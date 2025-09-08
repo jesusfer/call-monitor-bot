@@ -19,8 +19,8 @@ namespace CallingBotSample.Helpers
     using Microsoft.Extensions.Logging;
     using Microsoft.Extensions.Options;
     using Microsoft.Graph;
-    using Microsoft.Graph.Auth;
     using Microsoft.Graph.Communications.Calls;
+    using Microsoft.Graph.Models;
     using Microsoft.Identity.Client;
 
     /// <summary>
@@ -31,7 +31,7 @@ namespace CallingBotSample.Helpers
         private readonly ILogger<GraphHelper> logger;
         private readonly IConfiguration configuration;
         private readonly IEnumerable<Configuration.User> users;
-        private readonly IGraphServiceClient graphServiceClient;
+        private readonly GraphServiceClient graphServiceClient;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="GraphHelper"/> class.
@@ -39,7 +39,7 @@ namespace CallingBotSample.Helpers
         /// <param name="httpClientFactory">IHttpClientFactory instance.</param>
         /// <param name="logger">ILogger instance.</param>
         /// <param name="configuration">IConfiguration instance.</param>
-        public GraphHelper(ILogger<GraphHelper> logger, IConfiguration configuration, IOptions<Configuration.Users> users, IGraphServiceClient graphServiceClient)
+        public GraphHelper(ILogger<GraphHelper> logger, IConfiguration configuration, IOptions<Configuration.Users> users, GraphServiceClient graphServiceClient)
         {
             this.logger = logger;
             this.configuration = configuration;
@@ -52,16 +52,20 @@ namespace CallingBotSample.Helpers
         {
             try
             {
-                var onlineMeeting = new OnlineMeeting
+                // Create the request body for CreateOrGet endpoint
+                var createOrGetBody = new Microsoft.Graph.Users.Item.OnlineMeetings.CreateOrGet.CreateOrGetPostRequestBody
                 {
                     StartDateTime = DateTime.UtcNow,
                     EndDateTime = DateTime.UtcNow.AddMinutes(30),
-                    Subject = "Calling bot meeting",
+                    Subject = "Calling bot meeting"
                 };
 
-                var onlineMeetingResponse = await graphServiceClient.Users[this.configuration[Common.Constants.UserIdConfigurationSettingsKey]].OnlineMeetings
-                           .Request()
-                           .AddAsync(onlineMeeting);
+                var onlineMeetingResponse = await graphServiceClient
+                    .Users[this.configuration[Common.Constants.UserIdConfigurationSettingsKey]]
+                    .OnlineMeetings
+                    .CreateOrGet
+                    .PostAsync(createOrGetBody);
+
                 return onlineMeetingResponse;
             }
             catch (Exception ex)
@@ -91,7 +95,7 @@ namespace CallingBotSample.Helpers
                             }
                         }
                     },
-                RequestedModalities = new List<Modality>()
+                RequestedModalities = new List<Modality?>()
                     {
                         Modality.Audio
                     },
@@ -100,14 +104,12 @@ namespace CallingBotSample.Helpers
                 }
             };
 
-            return await graphServiceClient.Communications.Calls
-                .Request()
-                .AddAsync(call);
+            return await graphServiceClient.Communications.Calls.PostAsync(call);
         }
 
         public async Task TransferCallAsync(string replaceCallId)
         {
-            _ = Task.Run(async () =>
+            await Task.Run(async () =>
             {
                 await Task.Delay(15000);
                 var transferTarget = new InvitationParticipantInfo
@@ -130,14 +132,16 @@ namespace CallingBotSample.Helpers
                 try
                 {
                     await graphServiceClient.Communications.Calls[replaceCallId]
-                        .Transfer(transferTarget)
-                        .Request()
-                        .PostAsync();
+                        .Transfer
+                        .PostAsync(new Microsoft.Graph.Communications.Calls.Item.Transfer.TransferPostRequestBody
+                        {
+                            TransferTarget = transferTarget
+                        });
                 }
-                catch (System.Exception ex)
+                catch (Exception)
                 {
 
-                    throw ex;
+                    throw;
                 }
             });
         }
@@ -145,7 +149,6 @@ namespace CallingBotSample.Helpers
         public async Task HangUpCallAsync(Call call)
         {
             await graphServiceClient.Communications.Calls[call.Id]
-                .Request()
                 .DeleteAsync();
         }
 
@@ -161,7 +164,7 @@ namespace CallingBotSample.Helpers
                 var call = new Call
                 {
                     CallbackUri = $"{this.configuration[Common.Constants.BotBaseUrlConfigurationSettingsKey]}/callback",
-                    RequestedModalities = new List<Modality>()
+                    RequestedModalities = new List<Modality?>()
                     {
                         Modality.Audio
                     },
@@ -170,12 +173,11 @@ namespace CallingBotSample.Helpers
                     },
                     ChatInfo = chatInfo,
                     MeetingInfo = meetingInfo,
-                    TenantId = (meetingInfo as OrganizerMeetingInfo)?.Organizer.GetPrimaryIdentity()?.GetTenantId()
+                    TenantId = (meetingInfo as OrganizerMeetingInfo)?.Organizer?.User?.AdditionalData["tenantId"]?.ToString()
+                        ?? this.configuration[Common.Constants.TenantIdConfigurationSettingsKey],
                 };
 
-                var statefulCall = await graphServiceClient.Communications.Calls
-                        .Request()
-                        .AddAsync(call);
+                var statefulCall = await graphServiceClient.Communications.Calls.PostAsync(call);
 
                 return statefulCall;
             }
@@ -194,28 +196,31 @@ namespace CallingBotSample.Helpers
                 try
                 {
                     var participants = new List<InvitationParticipantInfo>()
-                {
-                    new InvitationParticipantInfo
                     {
-                        Identity = new IdentitySet
+                        new InvitationParticipantInfo
                         {
-                            User = new Identity
+                            Identity = new IdentitySet
                             {
-                                DisplayName = this.users.ElementAt(2).DisplayName,
-                                Id = this.users.ElementAt(2).Id
+                                User = new Identity
+                                {
+                                    DisplayName = this.users.ElementAt(2).DisplayName,
+                                    Id = this.users.ElementAt(2).Id
+                                }
                             }
                         }
-                    }
-                };
+                    };
 
+                    // Fix: Use PostAsync on the Invite property, which is an InviteRequestBuilder, not a method
                     var statefulCall = await graphServiceClient.Communications.Calls[meetingId].Participants
-                       .Invite(participants)
-                       .Request()
-                       .PostAsync();
+                        .Invite
+                        .PostAsync(new Microsoft.Graph.Communications.Calls.Item.Participants.Invite.InvitePostRequestBody
+                        {
+                            Participants = participants
+                        });
                 }
-                catch (Exception ex)
+                catch (Exception)
                 {
-                    throw ex;
+                    throw;
                 }
             });
         }

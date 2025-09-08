@@ -12,10 +12,13 @@ using Microsoft.Bot.Connector.Authentication;
 using Microsoft.Bot.Schema;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Graph;
+using Microsoft.Graph.Communications.Calls.Item.Answer;
+using Microsoft.Graph.Communications.Calls.Item.PlayPrompt;
 using Microsoft.Graph.Communications.Client.Authentication;
 using Microsoft.Graph.Communications.Common.Telemetry;
 using Microsoft.Graph.Communications.Core.Notifications;
 using Microsoft.Graph.Communications.Core.Serialization;
+using Microsoft.Graph.Models;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -40,7 +43,7 @@ namespace CallingBotSample.Bots
 
         private readonly ICard card;
         private readonly IGraph graph;
-        private readonly IGraphServiceClient graphServiceClient;
+        private readonly GraphServiceClient graphServiceClient;
 
         private static Dictionary<string, CallState?> CallsState = new();
         private static List<string> CallsSuccessful = new();
@@ -48,7 +51,7 @@ namespace CallingBotSample.Bots
         private IBotFrameworkHttpAdapter botAdapter;
 
 
-        public CallingBot(IBotFrameworkHttpAdapter botAdapter, BotOptions options, IConfiguration configuration, ICard card, IGraph graph, IGraphServiceClient graphServiceClient, IGraphLogger graphLogger)
+        public CallingBot(IBotFrameworkHttpAdapter botAdapter, BotOptions options, IConfiguration configuration, ICard card, IGraph graph, GraphServiceClient graphServiceClient, IGraphLogger graphLogger)
         {
             this.options = options;
             this.configuration = configuration;
@@ -154,7 +157,7 @@ namespace CallingBotSample.Bots
                 }
                 else
                 {
-                    var httpResponse = httpRequest.CreateResponse(HttpStatusCode.Forbidden);
+                    var httpResponse = new HttpResponseMessage(HttpStatusCode.Forbidden);
                     await httpResponse.CreateHttpResponseAsync(response).ConfigureAwait(false);
                 }
             }
@@ -311,11 +314,11 @@ namespace CallingBotSample.Bots
                     CallsState[call.Id] = call.State;
                 }
 
-                if (args.ChangeType == ChangeType.Created && call.State == CallState.Incoming)
+                if (args.ChangeType.Equals(ChangeType.Created )&& call.State == CallState.Incoming)
                 {
                     await this.BotAnswerIncomingCallAsync(call.Id, args.TenantId, args.ScenarioId).ConfigureAwait(false);
                 }
-                if (args.ChangeType == ChangeType.Updated && call.State == CallState.Established)
+                if (args.ChangeType.Equals(ChangeType.Updated) && call.State == CallState.Established)
                 {
                     // Bot joined the call
                     if (CallsState.ContainsKey(call.Id) && !CallsSuccessful.Contains(call.Id))
@@ -340,21 +343,24 @@ namespace CallingBotSample.Bots
         {
             Debug.WriteLine("Bot: Answering incoming call");
             Task answerTask = Task.Run(async () =>
-                                await this.graphServiceClient.Communications.Calls[callId].Answer(
-                                    callbackUri: new Uri(options.BotBaseUrl, "callback").ToString(),
-                                    mediaConfig: new ServiceHostedMediaConfig
+                                await this.graphServiceClient.Communications.Calls[callId].Answer
+                                    .PostAsync(new AnswerPostRequestBody
                                     {
-                                        PreFetchMedia = new List<MediaInfo>()
+                                        CallbackUri = new Uri(options.BotBaseUrl, "callback").ToString(),
+                                        MediaConfig = new ServiceHostedMediaConfig
                                         {
-                                            new MediaInfo()
+                                            PreFetchMedia = new List<MediaInfo>
                                             {
-                                                Uri = new Uri(options.BotBaseUrl, "audio/speech.wav").ToString(),
-                                                ResourceId = Guid.NewGuid().ToString(),
+                                                new MediaInfo
+                                                {
+                                                    Uri = new Uri(options.BotBaseUrl, "audio/speech.wav").ToString(),
+                                                    ResourceId = Guid.NewGuid().ToString(),
+                                                }
                                             }
-                                        }
-                                    },
-                                    acceptedModalities: new List<Modality> { Modality.Audio }).Request().PostAsync()
-                                 );
+                                        },
+                                        AcceptedModalities = new List<Modality?> { Modality.Audio }
+                                    }
+                                 ));
 
             await answerTask.ContinueWith(async (antecedent) =>
             {
@@ -362,20 +368,48 @@ namespace CallingBotSample.Bots
                 if (antecedent.Status == System.Threading.Tasks.TaskStatus.RanToCompletion)
                 {
                     await Task.Delay(5000);
-                    await graphServiceClient.Communications.Calls[callId].PlayPrompt(
-                       prompts: new List<Microsoft.Graph.Prompt>()
-                       {
-                           new MediaPrompt
-                           {
-                               MediaInfo = new MediaInfo
+                    // Replace this block inside BotAnswerIncomingCallAsync:
+
+                    await answerTask.ContinueWith(async (antecedent) =>
+                    {
+
+                        if (antecedent.Status == System.Threading.Tasks.TaskStatus.RanToCompletion)
+                        {
+                            await Task.Delay(5000);
+                            await graphServiceClient.Communications.Calls[callId].PlayPrompt
+                               .PostAsync(new PlayPromptPostRequestBody
                                {
-                                   Uri = new Uri(options.BotBaseUrl, "audio/speech.wav").ToString(),
-                                   ResourceId = Guid.NewGuid().ToString(),
+                                   Prompts = new List<Prompt>
+                                   {
+                                       new MediaPrompt
+                                       {
+                                           MediaInfo = new MediaInfo
+                                           {
+                                               Uri = new Uri(options.BotBaseUrl, "audio/speech.wav").ToString(),
+                                               ResourceId = Guid.NewGuid().ToString(),
+                                           }
+                                       }
+                                   }
+                               });
+                        }
+                    }
+                    );
+                    await graphServiceClient.Communications.Calls[callId].PlayPrompt
+                       .PostAsync(new PlayPromptPostRequestBody
+                       {
+                           Prompts = new List<Prompt>
+                           {
+                               new MediaPrompt
+                               {
+                                   MediaInfo = new MediaInfo
+                                   {
+                                       Uri = new Uri(options.BotBaseUrl, "audio/speech.wav").ToString(),
+                                       ResourceId = Guid.NewGuid().ToString(),
+                                   }
                                }
                            }
-                       })
-                       .Request()
-                       .PostAsync();
+                       });
+
                 }
             }
           );
